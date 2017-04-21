@@ -1,0 +1,234 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:vm="http://www.mulesoft.org/schema/mule/vm" xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns:file="http://www.mulesoft.org/schema/mule/file" xmlns:context="http://www.springframework.org/schema/context" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" 
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-current.xsd
+http://www.mulesoft.org/schema/mule/file http://www.mulesoft.org/schema/mule/file/current/mule-file.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.mulesoft.org/schema/mule/vm http://www.mulesoft.org/schema/mule/vm/current/mule-vm.xsd">
+    <context:property-placeholder location="ams-${mule.env}.properties"/>
+    
+    <db:mysql-config name="MySQL_Configuration" host="${database.host}" port="${database.port}" user="${database.user}" password="${database.password}" database="${database.database}" doc:name="MySQL Configuration"/>
+    
+    <db:template-query name="AccessKey_Insert" doc:name="Template Query">
+        <db:parameterized-query><![CDATA[insert into AMS_ACCESS_KEYS (ADDR_MAIL_ID, POCI_IDNTFR, DTL_DISP_NME, DISP_NME, PLACE_NME, PRVNC_ABBR_EN, PC_ID, PC, LDU_TYPE_CDE, DM_ID, DM, DPT_CDE_NME, DF_ID, DF_NAME, MSTR_KEY_NUM, LOCK_TYPE, KEY_TYPE) values (:addr_mail_id_val, :poci_idntfr_val, :dtl_disp_name_val, :disp_nme_val, :place_nme_val, :prvnc_abbr_en_val, :pc_id_val, :pc_val, :ldu_type_cde_val, :dm_id_val, :dm_val, :dpt_cde_nme_val, :df_id_val, :df_name_val, :mstr_key_num_val, :lock_type_val, :key_type_val)]]></db:parameterized-query>
+        <db:in-param name="addr_mail_id_val" type="INTEGER" defaultValue="null"/>
+        <db:in-param name="poci_idntfr_val" type="VARCHAR" defaultValue="null"/>
+        <db:in-param name="dtl_disp_nme_val" type="VARCHAR" defaultValue="null"/>
+        <db:in-param name="disp_nme_val" type="VARCHAR" defaultValue="null"/>
+        <db:in-param name="place_nme_val" type="VARCHAR" defaultValue="null"/>
+        <db:in-param name="prvnc_abbr_en_val" type="VARCHAR" defaultValue="null"/>
+        <db:in-param name="pc_id_val" type="INTEGER" defaultValue="null"/>
+        <db:in-param name="pc_val" type="VARCHAR" defaultValue="null"/>
+        <db:in-param name="ldu_type_cde_val" type="VARCHAR" defaultValue="null"/>
+        <db:in-param name="dm_id_val" type="INTEGER" defaultValue="null"/>
+        <db:in-param name="dm_val" type="VARCHAR" defaultValue="null"/>
+        <db:in-param name="dpt_cde_nme_val" type="VARCHAR" defaultValue="null"/>
+        <db:in-param name="df_id_val" type="INTEGER" defaultValue="null"/>
+        <db:in-param name="df_name_val" type="VARCHAR" defaultValue="null"/>
+        <db:in-param name="mstr_key_num_val" type="VARCHAR" defaultValue="null"/>
+        <db:in-param name="lock_type_val" type="VARCHAR" defaultValue="null"/>
+        <db:in-param name="key_type_val" type="VARCHAR" defaultValue="null"/>
+    </db:template-query>
+    <queued-asynchronous-processing-strategy name="Queued_Asynchronous_Processing_Strategy" maxThreads="80" minThreads="16" threadTTL="10000" doc:name="Queued Asynchronous Processing Strategy"/>
+    
+    <flow name="process_postal_codes">
+        <file:inbound-endpoint path="${ams.postalcodes.inputfilelocation}" moveToDirectory="${ams.postalcodes.outputfilelocation}" responseTimeout="10000" doc:name="Monitor for File">
+            <file:filename-regex-filter pattern="${ams.postalcodes.inputfileregex}" caseSensitive="true"/>
+        </file:inbound-endpoint>
+        <logger message="${logging.flowstartmessage}" level="INFO" doc:name="Log Flow Start"/>
+        <file:file-to-string-transformer doc:name="Convert File Stream to String"/>
+        <set-payload value="#[payload.split(&quot;\n&quot;)]" doc:name="Split String into Records"/>
+        <request-reply doc:name="Request-Reply">
+            <vm:outbound-endpoint exchange-pattern="one-way" path="splitSPrecords" doc:name="VM"/>
+            <vm:inbound-endpoint exchange-pattern="one-way" path="SPreturn" doc:name="VM"/>
+        </request-reply>
+        <logger message="${logging.flowcompletemessage}" level="INFO" doc:name="Log Flow Completion"/>
+    </flow>
+    <flow name="splitPCRecordsFlow">
+        <vm:inbound-endpoint exchange-pattern="one-way" path="splitSPrecords" doc:name="VM"/>
+        <collection-splitter doc:name="Collection Splitter"/>
+        <vm:outbound-endpoint exchange-pattern="one-way" path="processpostalcodes" doc:name="VM"/>
+    </flow>
+    <flow name="processPostalCodeRecordsFlow">
+        <vm:inbound-endpoint exchange-pattern="one-way" path="processpostalcodes" doc:name="VM"/>
+        <set-payload value="#[payload.split(&quot;\\|&quot;)]" doc:name="Split Record into Fields"/>
+        <db:stored-procedure config-ref="MySQL_Configuration" doc:name="Call Stored Proc to Insert Record into Database">
+            <db:parameterized-query><![CDATA[call sp_pc_upsert(:pc_id_val,
+:pc_val,
+:ldu_type_cde,
+:fsa_id_val,
+:fsa_val,
+:lfcl_stat_cde_val,
+:dm_type_cde_val,
+:dm_disp_nme_val,
+:df_id_val,
+:df_disp_name_val,
+:df_pc_id_val,
+:df_pc_disp_name_val,
+:rpo_id_val,
+:rpo_nme_val,
+:rpo_bus_name_val,
+:rpo_addr_line1_val,
+:rpo_addr_line3_val,
+:latitude_val,
+:longitude_val);]]></db:parameterized-query>
+            <db:in-param name="pc_id_val" type="INTEGER" value="#[payload[0].trim() == empty ? -1 : Integer.parseInt(payload[0])]"/>
+            <db:in-param name="pc_val" type="VARCHAR" value="#[payload[1]]"/>
+            <db:in-param name="ldu_type_cde" type="VARCHAR" value="#[payload[2]]"/>
+            <db:in-param name="fsa_id_val" type="INTEGER" value="#[payload[3].trim() == empty ? -1 : Integer.parseInt(payload[3])]"/>
+            <db:in-param name="fsa_val" type="VARCHAR" value="#[payload[4]]"/>
+            <db:in-param name="lfcl_stat_cde_val" type="VARCHAR" value="#[payload[5]]"/>
+            <db:in-param name="dm_type_cde_val" type="VARCHAR" value="#[payload[6]]"/>
+            <db:in-param name="dm_disp_nme_val" type="VARCHAR" value="#[payload[7]]"/>
+            <db:in-param name="df_id_val" type="INTEGER" value="#[payload[8].trim() == empty ? -1 : Integer.parseInt(payload[8])]"/>
+            <db:in-param name="df_disp_name_val" type="VARCHAR" value="#[payload[9]]"/>
+            <db:in-param name="df_pc_id_val" type="INTEGER" value="#[payload[10].trim() == empty ? -1 : Integer.parseInt(payload[10])]"/>
+            <db:in-param name="df_pc_disp_name_val" type="VARCHAR" value="#[payload[11]]"/>
+            <db:in-param name="rpo_id_val" type="INTEGER" value="#[payload[12].trim() == empty ? -1 : Integer.parseInt(payload[12])]"/>
+            <db:in-param name="rpo_nme_val" type="VARCHAR" value="#[payload[13]]"/>
+            <db:in-param name="rpo_bus_name_val" type="VARCHAR" value="#[payload[14]]"/>
+            <db:in-param name="rpo_addr_line1_val" type="VARCHAR" value="#[payload[15]]"/>
+            <db:in-param name="rpo_addr_line3_val" type="VARCHAR" value="#[payload[16]]"/>
+            <db:in-param name="latitude_val" type="DECIMAL" value="#[payload[17].trim() == empty ? 0.0 : Float.parseFloat(payload[17])]"/>
+            <db:in-param name="longitude_val" type="DECIMAL" value="#[payload[18].trim() == empty ? 0.0 : Float.parseFloat(payload[18])]"/>
+        </db:stored-procedure>
+        <collection-aggregator failOnTimeout="true" doc:name="Collection Aggregator"/>
+        <vm:outbound-endpoint exchange-pattern="one-way" path="SPreturn" doc:name="VM"/>
+    </flow>
+    
+    <flow name="process_access_keys" initialState="stopped">
+        <file:inbound-endpoint responseTimeout="10000" doc:name="Monitor for File" moveToDirectory="${ams.accesskeys.outputfilelocation}" path="${ams.accesskeys.inputfilelocation}">
+            <file:filename-regex-filter pattern="${ams.accesskeys.inputfileregex}" caseSensitive="true"/>
+        </file:inbound-endpoint>
+        <set-session-variable variableName="STARTTIME" value="#[server.nanoTime()]" doc:name="Get Flow Start Time"/>
+        <logger level="INFO" doc:name="Log Flow Start" message="${logging.flowstartmessage}"/>
+        <set-variable variableName="originalPayload" value="#[payload]" doc:name="Save Payload"/>
+        <db:bulk-execute config-ref="MySQL_Configuration" doc:name="Clear Table"><![CDATA[truncate ams_access_keys;]]></db:bulk-execute>
+        <set-payload value="#[flowVars.originalPayload]" doc:name="Reset Payload"/>
+        <file:file-to-string-transformer doc:name="Convert File Stream to String"/>
+        <set-payload value="#[payload.split(&quot;\n&quot;)]" doc:name="Split String into Records"/>
+        <foreach doc:name="For Each Record" collection="#[payload]">
+            <set-payload doc:name="Split Record into Fields" value="#[payload.split(&quot;\\|&quot;)]"/>
+            <db:insert config-ref="MySQL_Configuration" doc:name="Insert Record into Table">
+                <db:template-query-ref name="AccessKey_Insert"/>
+		        <db:in-param name="addr_mail_id_val" type="INTEGER" value="#[payload[0].trim() == empty ? -1 : Integer.parseInt(payload[0])]"/>
+		        <db:in-param name="poci_idntfr_val" type="VARCHAR" value="#[payload[1]]"/>
+		        <db:in-param name="dtl_disp_nme_val" type="VARCHAR" value="#[payload[2]]"/>
+		        <db:in-param name="disp_nme_val" type="VARCHAR" value="#[payload[3]]"/>
+		        <db:in-param name="place_nme_val" type="VARCHAR" value="#[payload[4]]"/>
+		        <db:in-param name="prvnc_abbr_en_val" type="VARCHAR" value="#[payload[5]]"/>
+		        <db:in-param name="pc_id_val" type="INTEGER" value="#[payload[6].trim() == empty ? -1 : Integer.parseInt(payload[6])]"/>
+		        <db:in-param name="pc_val" type="VARCHAR" value="#[payload[7]]"/>
+		        <db:in-param name="ldu_type_cde_val" type="VARCHAR" value="#[payload[8]]"/>
+		        <db:in-param name="dm_id_val" type="INTEGER" value="#[payload[9].trim() == empty ? -1 : Integer.parseInt(payload[9])]"/>
+		        <db:in-param name="dm_val" type="VARCHAR" value="#[payload[10]]"/>
+		        <db:in-param name="dpt_cde_nme_val" type="VARCHAR" value="#[payload[11]]"/>
+		        <db:in-param name="df_id_val" type="INTEGER" value="#[payload[12].trim() == empty ? -1 : Integer.parseInt(payload[12])]"/>
+		        <db:in-param name="df_name_val" type="VARCHAR" value="#[payload[13]]"/>
+		        <db:in-param name="mstr_key_num_val" type="VARCHAR" value="#[payload[14]]"/>
+		        <db:in-param name="lock_type_val" type="VARCHAR" value="#[payload[15]]"/>
+		        <db:in-param name="key_type_val" type="VARCHAR" value="#[payload[16]]"/>
+            </db:insert>
+        </foreach>
+        <logger level="INFO" doc:name="Log Flow Completion" message="${logging.flowcompletemessage} in #[(server.nanoTime() - sessionVars.STARTTIME)/1000000] milliseconds"/>
+    </flow>
+    
+    <flow name="process_access_keys_async" >
+        <file:inbound-endpoint responseTimeout="10000" doc:name="Monitor for File" moveToDirectory="${ams.accesskeys.outputfilelocation}" path="${ams.accesskeys.inputfilelocation}">
+            <file:filename-regex-filter pattern="${ams.accesskeys.inputfileregex}" caseSensitive="true"/>
+        </file:inbound-endpoint>
+        <set-session-variable variableName="STARTTIME" value="#[server.nanoTime()]" doc:name="Capture Start Time"/>
+        <logger level="INFO" doc:name="Log Flow Start" message="${logging.flowstartmessage}"/>
+        <set-variable variableName="originalPayload" value="#[payload]" doc:name="Save Payload"/>
+        <db:bulk-execute config-ref="MySQL_Configuration" doc:name="Clear Table"><![CDATA[truncate ams_access_keys;]]></db:bulk-execute>
+        <set-payload value="#[flowVars.originalPayload]" doc:name="Reset Payload"/>
+        <file:file-to-string-transformer doc:name="Convert File Stream to String"/>
+        <set-payload value="#[payload.split(&quot;\n&quot;)]" doc:name="Split String into Records"/>
+        <request-reply doc:name="Request-Reply">
+            <vm:outbound-endpoint exchange-pattern="one-way" path="splitACrecords" doc:name="VM"/>
+            <vm:inbound-endpoint exchange-pattern="one-way" path="ACreturn" doc:name="VM"/>
+        </request-reply>
+        <logger level="INFO" doc:name="Log Flow Completion" message="${logging.flowcompletemessage} in #[(server.nanoTime() - sessionVars.STARTTIME)/1000000] milliseconds"/>
+    </flow>
+    <flow name="splitAccessKeysFlow">
+        <vm:inbound-endpoint exchange-pattern="one-way" path="splitACrecords" doc:name="VM"/>
+        <collection-splitter doc:name="Collection Splitter"/>
+        <vm:outbound-endpoint exchange-pattern="one-way" path="processaccesskeys" doc:name="VM"/>
+    </flow>
+    <flow name="processAccessKeyRecordsFlow" processingStrategy="Queued_Asynchronous_Processing_Strategy">
+        <vm:inbound-endpoint exchange-pattern="one-way" path="processaccesskeys" doc:name="VM"/>
+        <set-payload value="#[payload.split(&quot;\\|&quot;)]" doc:name="Split Record into Fields"/>
+        <db:insert config-ref="MySQL_Configuration" doc:name="Insert Record into Table">
+            <db:template-query-ref name="AccessKey_Insert"/>
+            <db:in-param name="addr_mail_id_val" type="INTEGER" value="#[payload[0].trim() == empty ? -1 : Integer.parseInt(payload[0])]"/>
+            <db:in-param name="poci_idntfr_val" type="VARCHAR" value="#[payload[1]]"/>
+            <db:in-param name="dtl_disp_nme_val" type="VARCHAR" value="#[payload[2]]"/>
+            <db:in-param name="disp_nme_val" type="VARCHAR" value="#[payload[3]]"/>
+            <db:in-param name="place_nme_val" type="VARCHAR" value="#[payload[4]]"/>
+            <db:in-param name="prvnc_abbr_en_val" type="VARCHAR" value="#[payload[5]]"/>
+            <db:in-param name="pc_id_val" type="INTEGER" value="#[payload[6].trim() == empty ? -1 : Integer.parseInt(payload[6])]"/>
+            <db:in-param name="pc_val" type="VARCHAR" value="#[payload[7]]"/>
+            <db:in-param name="ldu_type_cde_val" type="VARCHAR" value="#[payload[8]]"/>
+            <db:in-param name="dm_id_val" type="INTEGER" value="#[payload[9].trim() == empty ? -1 : Integer.parseInt(payload[9])]"/>
+            <db:in-param name="dm_val" type="VARCHAR" value="#[payload[10]]"/>
+            <db:in-param name="dpt_cde_nme_val" type="VARCHAR" value="#[payload[11]]"/>
+            <db:in-param name="df_id_val" type="INTEGER" value="#[payload[12].trim() == empty ? -1 : Integer.parseInt(payload[12])]"/>
+            <db:in-param name="df_name_val" type="VARCHAR" value="#[payload[13]]"/>
+            <db:in-param name="mstr_key_num_val" type="VARCHAR" value="#[payload[14]]"/>
+            <db:in-param name="lock_type_val" type="VARCHAR" value="#[payload[15]]"/>
+            <db:in-param name="key_type_val" type="VARCHAR" value="#[payload[16]]"/>
+        </db:insert>
+        <collection-aggregator failOnTimeout="true" doc:name="Collection Aggregator"/>
+        <vm:outbound-endpoint exchange-pattern="one-way" path="ACreturn" doc:name="VM"/>
+    </flow>
+    
+    <sub-flow name="process_access_keys-ondemand">
+        <logger message="${logging.flowstartmessage}" level="INFO" doc:name="Log Flow Start"/>
+        <custom-transformer class="com.canadapost.spd.transformers.RetrieveFileListTransformer" doc:name="Get List of Matching Files">
+            <spring:property name="fileRegEx" value="${ams.accesskeys.inputfileregex}"/>
+            <spring:property name="pathToScan" value="${ams.accesskeys.inputfilelocation}"/>
+        </custom-transformer>
+        <foreach doc:name="For Each File" collection="#[payload]">
+            <set-variable variableName="currentFileName" value="#[payload]" doc:name="Set Current File Name"/>
+            <custom-transformer class="com.canadapost.spd.transformers.LoadFileTransformer" doc:name="Read File">
+                <spring:property name="fileNameProperty" value="currentFileName"/>
+            </custom-transformer>
+            <!-- <custom-transformer class="" doc:name="Retrieve File"/>  -->
+	        <set-variable variableName="originalPayload" value="#[payload]" doc:name="Save Payload"/>
+	        <db:bulk-execute config-ref="MySQL_Configuration" doc:name="Clear Table"><![CDATA[truncate ams_access_keys;]]></db:bulk-execute>
+	        <set-payload value="#[flowVars.originalPayload]" doc:name="Reset Payload"/>
+	        <foreach doc:name="For Each Record" collection="#[payload]">
+	            <set-payload doc:name="Split Record into Fields" value="#[payload.split(&quot;\\|&quot;)]"/>
+	            <db:insert config-ref="MySQL_Configuration" doc:name="Insert Record into Table">
+	                <db:template-query-ref name="AccessKey_Insert"/>
+			        <db:in-param name="addr_mail_id_val" type="INTEGER" value="#[payload[0].trim() == empty ? -1 : Integer.parseInt(payload[0])]"/>
+			        <db:in-param name="poci_idntfr_val" type="VARCHAR" value="#[payload[1]]"/>
+			        <db:in-param name="dtl_disp_nme_val" type="VARCHAR" value="#[payload[2]]"/>
+			        <db:in-param name="disp_nme_val" type="VARCHAR" value="#[payload[3]]"/>
+			        <db:in-param name="place_nme_val" type="VARCHAR" value="#[payload[4]]"/>
+			        <db:in-param name="prvnc_abbr_en_val" type="VARCHAR" value="#[payload[5]]"/>
+			        <db:in-param name="pc_id_val" type="INTEGER" value="#[payload[6].trim() == empty ? -1 : Integer.parseInt(payload[6])]"/>
+			        <db:in-param name="pc_val" type="VARCHAR" value="#[payload[7]]"/>
+			        <db:in-param name="ldu_type_cde_val" type="VARCHAR" value="#[payload[8]]"/>
+			        <db:in-param name="dm_id_val" type="INTEGER" value="#[payload[9].trim() == empty ? -1 : Integer.parseInt(payload[9])]"/>
+			        <db:in-param name="dm_val" type="VARCHAR" value="#[payload[10]]"/>
+			        <db:in-param name="dpt_cde_nme_val" type="VARCHAR" value="#[payload[11]]"/>
+			        <db:in-param name="df_id_val" type="INTEGER" value="#[payload[12].trim() == empty ? -1 : Integer.parseInt(payload[12])]"/>
+			        <db:in-param name="df_name_val" type="VARCHAR" value="#[payload[13]]"/>
+			        <db:in-param name="mstr_key_num_val" type="VARCHAR" value="#[payload[14]]"/>
+			        <db:in-param name="lock_type_val" type="VARCHAR" value="#[payload[15]]"/>
+			        <db:in-param name="key_type_val" type="VARCHAR" value="#[payload[16]]"/>
+	            </db:insert>
+	        </foreach>
+            <custom-transformer class="com.canadapost.spd.transformers.MoveFinishedFileTransformer" doc:name="Move Completed File">
+                <spring:property name="targetDirectory" value="${ams.accesskeys.outputfilelocation}"/>
+                <spring:property name="currentFileVar" value="currentFileName"/>
+            </custom-transformer>
+        </foreach>
+        <logger level="INFO" doc:name="Log Flow Completion" message="${logging.flowcompletemessage}"/>
+    </sub-flow>    
+</mule>
