@@ -100,43 +100,6 @@ http://www.mulesoft.org/schema/mule/vm http://www.mulesoft.org/schema/mule/vm/cu
         <vm:outbound-endpoint exchange-pattern="one-way" path="SPreturn" doc:name="VM"/>
     </flow>
     
-    <flow name="process_access_keys" initialState="stopped">
-        <file:inbound-endpoint responseTimeout="10000" doc:name="Monitor for File" moveToDirectory="${ams.accesskeys.outputfilelocation}" path="${ams.accesskeys.inputfilelocation}">
-            <file:filename-regex-filter pattern="${ams.accesskeys.inputfileregex}" caseSensitive="true"/>
-        </file:inbound-endpoint>
-        <set-session-variable variableName="STARTTIME" value="#[server.nanoTime()]" doc:name="Get Flow Start Time"/>
-        <logger level="INFO" doc:name="Log Flow Start" message="${logging.flowstartmessage}"/>
-        <set-variable variableName="originalPayload" value="#[payload]" doc:name="Save Payload"/>
-        <db:bulk-execute config-ref="MySQL_Configuration" doc:name="Clear Table"><![CDATA[truncate ams_access_keys;]]></db:bulk-execute>
-        <set-payload value="#[flowVars.originalPayload]" doc:name="Reset Payload"/>
-        <file:file-to-string-transformer doc:name="Convert File Stream to String"/>
-        <set-payload value="#[payload.split(&quot;\n&quot;)]" doc:name="Split String into Records"/>
-        <foreach doc:name="For Each Record" collection="#[payload]">
-            <set-payload doc:name="Split Record into Fields" value="#[payload.split(&quot;\\|&quot;)]"/>
-            <db:insert config-ref="MySQL_Configuration" doc:name="Insert Record into Table">
-                <db:template-query-ref name="AccessKey_Insert"/>
-		        <db:in-param name="addr_mail_id_val" type="INTEGER" value="#[payload[0].trim() == empty ? -1 : Integer.parseInt(payload[0])]"/>
-		        <db:in-param name="poci_idntfr_val" type="VARCHAR" value="#[payload[1]]"/>
-		        <db:in-param name="dtl_disp_nme_val" type="VARCHAR" value="#[payload[2]]"/>
-		        <db:in-param name="disp_nme_val" type="VARCHAR" value="#[payload[3]]"/>
-		        <db:in-param name="place_nme_val" type="VARCHAR" value="#[payload[4]]"/>
-		        <db:in-param name="prvnc_abbr_en_val" type="VARCHAR" value="#[payload[5]]"/>
-		        <db:in-param name="pc_id_val" type="INTEGER" value="#[payload[6].trim() == empty ? -1 : Integer.parseInt(payload[6])]"/>
-		        <db:in-param name="pc_val" type="VARCHAR" value="#[payload[7]]"/>
-		        <db:in-param name="ldu_type_cde_val" type="VARCHAR" value="#[payload[8]]"/>
-		        <db:in-param name="dm_id_val" type="INTEGER" value="#[payload[9].trim() == empty ? -1 : Integer.parseInt(payload[9])]"/>
-		        <db:in-param name="dm_val" type="VARCHAR" value="#[payload[10]]"/>
-		        <db:in-param name="dpt_cde_nme_val" type="VARCHAR" value="#[payload[11]]"/>
-		        <db:in-param name="df_id_val" type="INTEGER" value="#[payload[12].trim() == empty ? -1 : Integer.parseInt(payload[12])]"/>
-		        <db:in-param name="df_name_val" type="VARCHAR" value="#[payload[13]]"/>
-		        <db:in-param name="mstr_key_num_val" type="VARCHAR" value="#[payload[14]]"/>
-		        <db:in-param name="lock_type_val" type="VARCHAR" value="#[payload[15]]"/>
-		        <db:in-param name="key_type_val" type="VARCHAR" value="#[payload[16]]"/>
-            </db:insert>
-        </foreach>
-        <logger level="INFO" doc:name="Log Flow Completion" message="${logging.flowcompletemessage} in #[(server.nanoTime() - sessionVars.STARTTIME)/1000000] milliseconds"/>
-    </flow>
-    
     <flow name="process_access_keys_async" >
         <file:inbound-endpoint responseTimeout="10000" doc:name="Monitor for File" moveToDirectory="${ams.accesskeys.outputfilelocation}" path="${ams.accesskeys.inputfilelocation}">
             <file:filename-regex-filter pattern="${ams.accesskeys.inputfileregex}" caseSensitive="true"/>
