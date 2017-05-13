@@ -10,8 +10,8 @@
 
 
     <Appenders>
-        <RollingFile name="file" fileName="${sys:mule.home}${sys:file.separator}logs${sys:file.separator}ams_projects.log" 
-                 filePattern="${sys:mule.home}${sys:file.separator}logs${sys:file.separator}ams_projects-%i.log">
+        <RollingFile name="file" fileName="${sys:mule.home}${sys:file.separator}logs${sys:file.separator}SPD-Demo.log" 
+                 filePattern="${sys:mule.home}${sys:file.separator}logs${sys:file.separator}SPD-Demo-%i.log">
             <PatternLayout pattern="%d [%t] %-5p %c - %m%n" />
             <SizeBasedTriggeringPolicy size="10 MB" />
             <DefaultRolloverStrategy max="10"/>
@@ -34,9 +34,6 @@
 
         <!-- Reduce startup noise -->
         <AsyncLogger name="org.springframework.beans.factory" level="WARN"/>
-        
-        <AsyncLogger name="org.mule.transport.DefaultReplyToHandler" level="OFF" />
-        <AsyncLogger name="org.mule.lifecycle.AbstractLifecycleManager" level="OFF"/>
 
         <!-- Mule classes -->
         <AsyncLogger name="org.mule" level="INFO"/>
