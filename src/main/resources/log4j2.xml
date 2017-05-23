@@ -20,6 +20,8 @@
     <Loggers>
     	
     	
+		<!-- turn off certian logging events -->
+		<AsyncLogger name="org.mule.transport.DefaultReplyToHandler" level="OFF"/>
 		<!-- Http Logger shows wire traffic on DEBUG -->
 		<AsyncLogger name="org.mule.module.http.internal.HttpMessageLogger" level="WARN"/>
 	

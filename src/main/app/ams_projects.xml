@@ -107,7 +107,7 @@ http://www.mulesoft.org/schema/mule/vm http://www.mulesoft.org/schema/mule/vm/cu
         <set-session-variable variableName="STARTTIME" value="#[server.nanoTime()]" doc:name="Capture Start Time"/>
         <logger level="INFO" doc:name="Log Flow Start" message="${logging.flowstartmessage}"/>
         <set-variable variableName="originalPayload" value="#[payload]" doc:name="Save Payload"/>
-        <db:bulk-execute config-ref="MySQL_Configuration" doc:name="Clear Table"><![CDATA[truncate ams_access_keys;]]></db:bulk-execute>
+        <db:bulk-execute config-ref="MySQL_Configuration" doc:name="Clear Table"><![CDATA[truncate AMS_ACCESS_KEYS;]]></db:bulk-execute>
         <set-payload value="#[flowVars.originalPayload]" doc:name="Reset Payload"/>
         <file:file-to-string-transformer doc:name="Convert File Stream to String"/>
         <set-payload value="#[payload.split(&quot;\n&quot;)]" doc:name="Split String into Records"/>
@@ -162,7 +162,7 @@ http://www.mulesoft.org/schema/mule/vm http://www.mulesoft.org/schema/mule/vm/cu
             </custom-transformer>
             <!-- <custom-transformer class="" doc:name="Retrieve File"/>  -->
 	        <set-variable variableName="originalPayload" value="#[payload]" doc:name="Save Payload"/>
-	        <db:bulk-execute config-ref="MySQL_Configuration" doc:name="Clear Table"><![CDATA[truncate ams_access_keys;]]></db:bulk-execute>
+	        <db:bulk-execute config-ref="MySQL_Configuration" doc:name="Clear Table"><![CDATA[truncate AMS_ACCESS_KEYS;]]></db:bulk-execute>
 	        <set-payload value="#[flowVars.originalPayload]" doc:name="Reset Payload"/>
 	        <foreach doc:name="For Each Record" collection="#[payload]">
 	            <set-payload doc:name="Split Record into Fields" value="#[payload.split(&quot;\\|&quot;)]"/>
